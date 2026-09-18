@@ -1,0 +1,7 @@
+.env
+.venv/
+.pip-cache/
+.tiktoken-cache/
+__pycache__/
+*.py[cod]
+.streamlit/secrets.toml
