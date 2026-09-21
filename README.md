@@ -1,10 +1,9 @@
 # Agentic AI Issue Triage
-
-[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Google Gen AI](https://img.shields.io/badge/Google_Gen_AI-Gemini-4285F4?logo=google&logoColor=white)](https://ai.google.dev/gemini-api/docs)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.40%2B-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io/)
-[![Pydantic](https://img.shields.io/badge/Pydantic-2-E92063?logo=pydantic&logoColor=white)](https://docs.pydantic.dev/)
-[![tiktoken](https://img.shields.io/badge/tiktoken-Token_counting-111111)](https://github.com/openai/tiktoken)
+[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Gemini](https://img.shields.io/badge/Google_Gemini-API-8E75B2?style=for-the-badge&logo=googlegemini&logoColor=white)](https://ai.google.dev/gemini-api/docs)
+[![Streamlit](https://img.shields.io/badge/Streamlit-1.40+-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://streamlit.io/)
+[![Pydantic](https://img.shields.io/badge/Pydantic-v2-E92063?style=for-the-badge&logo=pydantic&logoColor=white)](https://docs.pydantic.dev/)
+[![tiktoken](https://img.shields.io/badge/tiktoken-Tokenization-111111?style=for-the-badge&logo=openai&logoColor=white)](https://github.com/openai/tiktoken)
 
 Các demo Python nhỏ, theo từng bước, để xây dựng quy trình phân loại software issue với Gemini: gọi model cơ bản, đo token, structured output, function calling có kiểm soát và giao diện Streamlit.
 
