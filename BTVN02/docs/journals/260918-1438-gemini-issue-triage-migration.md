@@ -17,7 +17,7 @@ Chuyển bộ demo Issue Triage sang Google AI Studio để chạy bằng Gemini
 
 ## Verification
 
-- `Demo Issue Triage/.venv/Scripts/python.exe -m py_compile` chạy thành công cho toàn bộ source Python của demo.
+- `BTVN02/.venv/Scripts/python.exe -m py_compile` chạy thành công cho toàn bộ source Python của demo.
 - Các lệnh gọi Gemini thực tế vẫn cần một `GEMINI_API_KEY` hợp lệ trong `.env` và quota/model được cấp ở Google AI Studio.
 
 ## Decision

@@ -1,95 +1,80 @@
-# Agentic AI Issue Triage
-[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
-[![Gemini](https://img.shields.io/badge/Google_Gemini-API-8E75B2?style=for-the-badge&logo=googlegemini&logoColor=white)](https://ai.google.dev/gemini-api/docs)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.40+-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://streamlit.io/)
-[![Pydantic](https://img.shields.io/badge/Pydantic-v2-E92063?style=for-the-badge&logo=pydantic&logoColor=white)](https://docs.pydantic.dev/)
-[![tiktoken](https://img.shields.io/badge/tiktoken-Tokenization-111111?style=for-the-badge&logo=openai&logoColor=white)](https://github.com/openai/tiktoken)
+# BTVN Agentic AI — Kho lưu trữ bài tập thực hành
 
-Các demo Python nhỏ, theo từng bước, để xây dựng quy trình phân loại software issue với Gemini: gọi model cơ bản, đo token, structured output, function calling có kiểm soát và giao diện Streamlit.
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Gemini](https://img.shields.io/badge/Gemini-Google_Gen_AI-8E75B2?style=for-the-badge&logo=googlegemini&logoColor=white)](https://ai.google.dev/gemini-api/docs)
+[![License](https://img.shields.io/badge/License-Educational-green?style=for-the-badge)](https://github.com/BinCry/BTVN-Agentic-AI)
 
-## Công nghệ sử dụng
+Repository tổng hợp mã nguồn, bài tập về nhà (BTVN) và các dự án thực hành qua các buổi trong khóa học **Agentic AI**.
 
-| Công nghệ | Vai trò |
-| --- | --- |
-| Python | Ngôn ngữ chính cho toàn bộ demo |
-| Google Gen AI SDK / Gemini | Phân loại issue, structured output và function calling |
-| Streamlit | Giao diện web cho demo triage |
-| Pydantic | Schema hóa kết quả structured output |
-| tiktoken | So sánh số token giữa tiếng Anh và tiếng Việt |
-| python-dotenv | Nạp cấu hình cục bộ từ `.env` |
+---
 
-## Bắt đầu nhanh
+## 📂 Danh sách bài tập
 
-Yêu cầu: Python 3.10 trở lên và Google AI Studio API key.
+| Buổi | Thư mục | Chủ đề | Công nghệ / Tính năng chính |
+| :--- | :--- | :--- | :--- |
+| **Buổi 02** | [`BTVN02/`](./BTVN02/) | **Agentic AI Issue Triage** | • LLM Minimal Call<br>• Đo lường Token (tiktoken)<br>• Structured Output với Pydantic<br>• Controlled Function Calling<br>• Giao diện Web Streamlit |
+| **Buổi 03** | `BTVN03/` *(Sắp tới)* | *Đang cập nhật...* | *Đang cập nhật...* |
 
+---
+
+## 🏗️ Cấu trúc Repository
+
+```text
+BTVN-Agentic-AI/
+├── BTVN02/                         # Bài tập buổi 2: Issue Triage with Gemini
+│   ├── 00_minimal_triage.py        # Demo 00: Gọi Gemini cơ bản
+│   ├── 01_measure_tokens.py        # Demo 01: Đo token tiếng Anh/Việt
+│   ├── 02_structured_output.py     # Demo 02: Structured output với Pydantic
+│   ├── 03_function_calling.py      # Demo 03: Function calling có kiểm soát
+│   ├── 04_streamlit_triage.py      # Demo 04: Giao diện web Streamlit
+│   ├── demo_common.py              # Cấu hình Gemini & biến môi trường
+│   ├── triage_workflow.py          # Luồng triage và validation tool call
+│   ├── demo-guide.html             # Hướng dẫn chi tiết định dạng HTML
+│   ├── requirements.txt            # Thư viện phụ thuộc cho BTVN02
+│   ├── README.md                   # Hướng dẫn chi tiết cho BTVN02
+│   └── docs/                       # Tài liệu & nhật ký phát triển
+├── README.md                       # Giới thiệu tổng quan repository
+└── .gitignore                      # Cấu hình bỏ qua các file nhạy cảm và cache
+```
+
+---
+
+## 🚀 Hướng dẫn bắt đầu chung
+
+Mỗi bài tập được thiết kế độc lập theo từng thư mục (ví dụ: `BTVN02/`). Để làm việc với một bài tập cụ thể:
+
+### 1. Clone Repository
 ```powershell
 git clone https://github.com/BinCry/BTVN-Agentic-AI.git
-cd BTVN-Agentic-AI\"Demo Issue Triage\"
+cd BTVN-Agentic-AI
+```
 
+### 2. Di chuyển vào thư mục bài tập cần chạy
+```powershell
+cd BTVN02
+```
+
+### 3. Thiết lập môi trường Python & Cài đặt dependencies
+```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+```
 
+*(Trên macOS / Linux: sử dụng `source .venv/bin/activate`)*
+
+### 4. Cấu hình biến môi trường
+Tạo file `.env` từ file mẫu `.env.example` và điền API key của bạn:
+```powershell
 Copy-Item .env.example .env
 ```
 
-Mở file `.env` vừa tạo và điền key của riêng bạn:
+Xem hướng dẫn chi tiết về cách chạy từng demo và tính năng trong `README.md` của từng thư mục bài tập (ví dụ: [`BTVN02/README.md`](./BTVN02/README.md)).
 
-```dotenv
-GEMINI_API_KEY=your_google_ai_studio_key
-GEMINI_MODEL=gemini-3.5-flash-lite
-```
+---
 
-Trên macOS/Linux, kích hoạt virtual environment bằng `source .venv/bin/activate` và sao chép file bằng `cp .env.example .env`.
+## 🔒 Quy ước bảo mật (Security Best Practices)
 
-## Chạy demo
-
-Tất cả lệnh dưới đây được chạy bên trong thư mục `Demo Issue Triage`.
-
-| Demo | Lệnh | Nội dung |
-| --- | --- | --- |
-| 00 | `python 00_minimal_triage.py` | Gửi một issue đến Gemini và in câu trả lời tự do |
-| 01 | `python 01_measure_tokens.py` | So sánh token tiếng Anh và tiếng Việt với các tokenizer |
-| 02 | `python 02_structured_output.py` | So sánh JSON bằng prompt với structured output theo Pydantic schema |
-| 03 | `python 03_function_calling.py` | Function calling do ứng dụng kiểm soát và xác thực |
-| 04 | `streamlit run 04_streamlit_triage.py` | Giao diện Streamlit hiển thị triage và tool trace |
-
-Bạn có thể thay nội dung issue ở các demo CLI:
-
-```powershell
-python 03_function_calling.py --issue "Thanh toán Visa trả HTTP 500 từ 14:30"
-```
-
-## Function-calling flow
-
-Demo 03 và 04 chỉ cho phép model yêu cầu `get_component_owner` cho ba component đã được ứng dụng phê duyệt: `payment`, `identity` và `search`. Ứng dụng xác thực tên tool, tham số và component trước khi thực thi; sau đó mới gửi kết quả về cho Gemini để tạo câu trả lời cuối cùng.
-
-## Cấu trúc project
-
-```text
-Demo Issue Triage/
-├── 00_minimal_triage.py       # Gemini cơ bản
-├── 01_measure_tokens.py       # Đo token
-├── 02_structured_output.py    # Structured output
-├── 03_function_calling.py     # Function calling qua CLI
-├── 04_streamlit_triage.py     # Function calling qua Streamlit
-├── demo_common.py             # Cấu hình Gemini và biến môi trường dùng chung
-├── triage_workflow.py         # Luồng triage và validation tool call
-├── .env.example               # Mẫu cấu hình an toàn
-└── requirements.txt
-```
-
-## Bảo mật API key
-
-- Không đưa `GEMINI_API_KEY` thật vào mã nguồn, README, issue hoặc commit.
-- Chỉ lưu key trong `Demo Issue Triage/.env` trên máy cục bộ.
-- `.env`, virtual environment và cache đã được khai báo trong `.gitignore`.
-- Nếu key từng bị lộ, hãy thu hồi hoặc xoay key ngay trong Google AI Studio.
-
-## Đóng góp
-
-Tạo branch riêng cho thay đổi, chạy demo liên quan và không commit file `.env` trước khi mở pull request.
-
-## License
-
-Repository hiện chưa có file license. Hãy liên hệ chủ repository trước khi tái sử dụng ngoài mục đích học tập.
+- **Tuyệt đối không đưa API Key thật** vào mã nguồn, README hay commit lên GitHub.
+- Tất cả API Key đều được nạp thông qua file `.env` cục bộ. File `.gitignore` ở root và từng thư mục đã được cấu hình để chặn upload `.env`, virtual environment (`.venv`) và cache.
+- Khi chia sẻ mã nguồn hoặc nộp bài, chỉ chia sẻ mã nguồn sạch, không bao gồm thông tin xác thực hay quota cá nhân.
