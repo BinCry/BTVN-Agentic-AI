@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """SE373 BTVN03 - Controlled flight-booking agents with deterministic mock tools.
 
-The default policy is deterministic so the complete benchmark can run without a
-network connection or an API key.  ``--model-mode langchain`` enables a real
-LangChain ReAct model (configured through ``SE373_MODEL``); its tool wrappers
-still route every operation through the same harness used by the benchmark.
+The deterministic policy supports repeatable benchmarking without an API key.
+``--model-mode langchain`` enables Gemini through LangChain for ReAct and
+structured planning for Plan/Hybrid, with the same controlled mock harness.
 """
 
 from __future__ import annotations
@@ -15,6 +14,7 @@ import copy
 import json
 import os
 import sys
+import threading
 import time
 from collections import Counter
 from dataclasses import dataclass, field
@@ -36,6 +36,7 @@ SCENARIOS = ("S1", "S2", "S3", "S4", "S5", "S6")
 MAX_STEPS = 18
 LOOP_THRESHOLD = 3
 STALL_THRESHOLD = 5
+TIMEOUT_RETRIES_PER_FLIGHT = 2
 
 
 # 2. DATA MODELS
@@ -100,6 +101,12 @@ class PlanStep(BaseModel):
     argument_source: str | None = None
 
 
+class AgentPlan(BaseModel):
+    """Structured output returned by a LangChain planner."""
+
+    steps: list[PlanStep] = Field(min_length=1, max_length=8)
+
+
 class Handoff(BaseModel):
     status: str
     current_state: dict[str, Any]
@@ -112,9 +119,12 @@ class Handoff(BaseModel):
 class RunMetrics(BaseModel):
     pattern: str
     scenario: str
+    model_mode: str = "deterministic"
+    scenario_class: Literal["autonomous", "need_human", "no_option", "unknown"] = "unknown"
     success: bool = False
     constraint_violations: int = 0
     permission_violations: int = 0
+    permission_blocks: int = 0
     model_calls: int = 0
     tool_calls: int = 0
     iterations: int = 0
@@ -173,6 +183,7 @@ class RuntimeState:
     metrics: RunMetrics
     messages: list[dict[str, Any]] = field(default_factory=list)
     plan: list[PlanStep] = field(default_factory=list)
+    plan_history: list[list[PlanStep]] = field(default_factory=list)
     current_step: int = 0
     tool_history: list[dict[str, Any]] = field(default_factory=list)
     observations: list[dict[str, Any]] = field(default_factory=list)
@@ -362,7 +373,14 @@ def _matching_flight(flight: Flight, constraints: BookingConstraints) -> bool:
 
 
 class ConstraintHarness:
-    def validate_action(self, action: Action, db: MockFlightDB, constraints: BookingConstraints) -> tuple[bool, str]:
+    def validate_action(
+        self,
+        action: Action,
+        db: MockFlightDB,
+        constraints: BookingConstraints,
+        observations: list[dict[str, Any]],
+        active_booking_code: str | None,
+    ) -> tuple[bool, str]:
         if action.tool == "search_flights":
             exact_route = (
                 action.args.get("origin") == constraints.origin
@@ -371,11 +389,20 @@ class ConstraintHarness:
             )
             return (exact_route, "Search arguments must equal structured BookingConstraints")
         if action.tool == "book_seat":
+            if active_booking_code:
+                return False, "Only one active seat hold is allowed per run"
             flight = db.flights.get(str(action.args.get("flight_id", "")))
-            return (
-                flight is not None and _matching_flight(flight, constraints),
-                "Cannot hold a flight outside route/date/time/price/refund constraints",
+            if flight is None or not _matching_flight(flight, constraints):
+                return False, "Cannot hold a flight outside route/date/time/price/refund constraints"
+            seat = str(action.args.get("seat", ""))
+            observed = any(
+                item["tool"] == "check_seat"
+                and item["result"].get("flight_id") == flight.flight_id
+                and item["result"].get("status") == "available"
+                and seat in item["result"].get("available_seats", [])
+                for item in observations
             )
+            return observed, "Seat must first be observed available through check_seat"
         if action.tool == "pay_booking":
             booking = db.bookings.get(str(action.args.get("booking_code", "")))
             if not booking:
@@ -528,6 +555,7 @@ class ExecutionHarness:
         self.loop = LoopDetector()
         self.budget = BudgetGuard()
         self.logger = TraceLogger()
+        self._lock = threading.RLock()
 
     def _terminate(self, reason: TerminationReason, blocker: str = "") -> None:
         self.state.termination_reason = reason
@@ -568,12 +596,19 @@ class ExecutionHarness:
             self.state.no_progress_count = 0
 
     def execute(self, action: Action) -> dict[str, Any]:
+        # LangChain may dispatch multiple tool calls from one model message.
+        with self._lock:
+            return self._execute_locked(action)
+
+    def _execute_locked(self, action: Action) -> dict[str, Any]:
         if self.state.termination_reason:
             return {"status": "terminated", "reason": self.state.termination_reason.value}
         self.state.metrics.iterations += 1
         self.state.iteration = self.state.metrics.iterations
 
-        valid, message = self.constraints.validate_action(action, self.db, self.state.constraints)
+        valid, message = self.constraints.validate_action(
+            action, self.db, self.state.constraints, self.state.observations, self.state.booking_code
+        )
         if not valid:
             self.state.metrics.constraint_violations += 1
             result = {"status": "constraint_rejected", "detail": message}
@@ -585,13 +620,13 @@ class ExecutionHarness:
         permission, message = self.permissions.check(action, self.db, self.state.constraints)
         if permission != "ALLOW":
             if permission == "NEED_APPROVAL":
-                self.state.metrics.permission_violations += 1
+                self.state.metrics.permission_blocks += 1
                 result = {"status": "need_human", "detail": message}
                 self._record_result(action, result)
                 self.logger.add(self.state, action, result, permission, False)
                 self._terminate(TerminationReason.NEED_HUMAN, message)
                 return result
-            self.state.metrics.permission_violations += 1
+            self.state.metrics.permission_blocks += 1
             result = {"status": "permission_blocked", "detail": message}
             self._record_result(action, result)
             self.logger.add(self.state, action, result, permission, False)
@@ -649,17 +684,27 @@ def _candidate_flights(state: RuntimeState) -> list[Flight]:
 
 
 def _next_candidate(state: RuntimeState) -> Flight | None:
+    """Retry a transient timeout twice, then try another observed candidate."""
     for flight in _candidate_flights(state):
         check = _last_result(state, "check_seat", flight.flight_id)
-        if not check or check.get("status") != "full":
+        if not check or check.get("status") == "available":
             return flight
+        if check.get("status") == "timeout":
+            timeouts = sum(
+                observation["tool"] == "check_seat"
+                and observation["result"].get("flight_id") == flight.flight_id
+                and observation["result"].get("status") == "timeout"
+                for observation in state.observations
+            )
+            if timeouts < TIMEOUT_RETRIES_PER_FLIGHT:
+                return flight
     return None
 
 
 def _preferred_seat(availability: dict[str, Any], preference: str | None) -> str | None:
     seats = list(availability.get("available_seats", []))
     if preference == "window":
-        return next((seat for seat in seats if seat.endswith("A") or seat.endswith("F")), None)
+        return next((seat for seat in seats if seat.endswith("A") or seat.endswith("F")), None) or (seats[0] if seats else None)
     return seats[0] if seats else None
 
 
@@ -707,12 +752,10 @@ def run_react(state: RuntimeState, harness: ExecutionHarness) -> None:
 
 
 def run_langchain_react(state: RuntimeState, harness: ExecutionHarness) -> None:
-    """Optional real LangChain ReAct path; all its tool functions call the harness."""
-    model = os.environ.get("SE373_MODEL")
-    if not model:
-        raise RuntimeError("--model-mode langchain requires SE373_MODEL in the environment")
+    """LangChain create_agent with Gemini; tool functions are harness wrappers."""
     try:
         from langchain.agents import create_agent
+        from langchain_core.callbacks import BaseCallbackHandler
         from langchain_core.tools import tool
     except ImportError as error:
         raise RuntimeError("Install requirements.txt before using --model-mode langchain") from error
@@ -721,27 +764,27 @@ def run_langchain_react(state: RuntimeState, harness: ExecutionHarness) -> None:
         result = harness.execute(action)
         return json.dumps(result, ensure_ascii=False)
 
-    @tool
+    @tool("search_flights")
     def lc_search_flights(origin: str, destination: str, depart_date: str) -> str:
         """Search flights. Use for all flight facts."""
         return call(Action(tool="search_flights", args={"origin": origin, "destination": destination, "depart_date": depart_date}))
 
-    @tool
+    @tool("check_seat")
     def lc_check_seat(flight_id: str) -> str:
         """Check seat availability for a flight ID returned by search."""
         return call(Action(tool="check_seat", args={"flight_id": flight_id}))
 
-    @tool
+    @tool("book_seat")
     def lc_book_seat(flight_id: str, seat: str) -> str:
         """Hold an observed available seat; this is a side effect controlled by the harness."""
         return call(Action(tool="book_seat", args={"flight_id": flight_id, "seat": seat}))
 
-    @tool
+    @tool("pay_booking")
     def lc_pay_booking(booking_code: str) -> str:
         """Pay an observed held booking; harness permission is enforced before execution."""
         return call(Action(tool="pay_booking", args={"booking_code": booking_code}))
 
-    @tool
+    @tool("get_booking")
     def lc_get_booking(booking_code: str) -> str:
         """Verify the final booking state after payment."""
         return call(Action(tool="get_booking", args={"booking_code": booking_code}))
@@ -752,16 +795,66 @@ def run_langchain_react(state: RuntimeState, harness: ExecutionHarness) -> None:
         "Constraints are structured data. Do not bypass harness decisions. "
         "Stop after a tool reports need_human or terminated."
     )
+
+    class ModelMetricsCallback(BaseCallbackHandler):
+        def on_chat_model_start(self, serialized: dict[str, Any], messages: Any, **kwargs: Any) -> None:
+            state.metrics.model_calls += 1
+
+        def on_llm_end(self, response: Any, **kwargs: Any) -> None:
+            for generation_group in response.generations:
+                for generation in generation_group:
+                    usage = getattr(getattr(generation, "message", None), "usage_metadata", None)
+                    if usage:
+                        state.metrics.input_tokens = (state.metrics.input_tokens or 0) + int(usage.get("input_tokens", 0))
+                        state.metrics.output_tokens = (state.metrics.output_tokens or 0) + int(usage.get("output_tokens", 0))
+
     agent = create_agent(
-        model=model,
+        model=build_gemini_model(),
         tools=[lc_search_flights, lc_check_seat, lc_book_seat, lc_pay_booking, lc_get_booking],
         system_prompt=system_prompt,
     )
-    response = agent.invoke({"messages": [{"role": "user", "content": state.constraints.model_dump_json()}]})
+    try:
+        response = agent.invoke(
+            {"messages": [{"role": "user", "content": state.constraints.model_dump_json()}]},
+            config={"recursion_limit": MAX_STEPS * 3, "callbacks": [ModelMetricsCallback()]},
+        )
+    except Exception as error:
+        # The mock harness remains authoritative even if the provider fails.
+        if not state.termination_reason:
+            detail = str(error).replace(os.environ.get("GOOGLE_API_KEY", "\x00"), "[redacted]")[:240]
+            harness._terminate(TerminationReason.FAILURE, f"LangChain/provider error: {type(error).__name__}: {detail}")
+        return
     messages = response.get("messages", []) if isinstance(response, dict) else []
-    state.metrics.model_calls = sum(1 for message in messages if getattr(message, "type", "") == "ai")
+    state.metrics.model_calls = max(
+        state.metrics.model_calls,
+        sum(1 for message in messages if getattr(message, "type", "") == "ai"),
+    )
+    token_totals = [getattr(message, "usage_metadata", None) for message in messages]
+    token_totals = [usage for usage in token_totals if usage]
+    if token_totals and state.metrics.input_tokens is None:
+        state.metrics.input_tokens = sum(int(usage.get("input_tokens", 0)) for usage in token_totals)
+        state.metrics.output_tokens = sum(int(usage.get("output_tokens", 0)) for usage in token_totals)
     if not state.termination_reason:
         harness._terminate(TerminationReason.FAILURE, "LangChain agent stopped without code-verified completion")
+
+
+def build_gemini_model() -> Any:
+    """The only model factory; never embeds or logs the Google AI Studio key."""
+    model_name = os.environ.get("SE373_MODEL", "").strip()
+    api_key = os.environ.get("GOOGLE_API_KEY", "").strip()
+    if not model_name or not api_key:
+        raise RuntimeError("Set SE373_MODEL and GOOGLE_API_KEY in BTVN03/.env for --model-mode langchain")
+    try:
+        from langchain_google_genai import ChatGoogleGenerativeAI
+    except ImportError as error:
+        raise RuntimeError("Install BTVN03/requirements.txt to use Google AI Studio") from error
+    return ChatGoogleGenerativeAI(
+        model=model_name,
+        api_key=api_key,
+        vertexai=False,
+        request_timeout=30,
+        retries=0,
+    )
 
 
 # 7. PLAN-THEN-EXECUTE AGENT
@@ -796,24 +889,9 @@ def resolve_plan_step(state: RuntimeState, step: PlanStep) -> Action | None:
     return None
 
 
-def run_plan_then_execute(state: RuntimeState, harness: ExecutionHarness) -> None:
-    # The planner is intentionally called exactly once; this architecture never replans.
-    state.metrics.model_calls += 1
-    state.plan = initial_plan()
-    for step in state.plan:
-        state.current_step = step.id
-        action = resolve_plan_step(state, step)
-        if not action:
-            harness._terminate(TerminationReason.FAILURE, f"Plan step {step.id} cannot be resolved from observations")
-            return
-        harness.execute(action)
-        if state.termination_reason:
-            return
-        if step.expected_tool == "check_seat" and _last_result(state, "check_seat", state.selected_flight_id).get("status") != "available":
-            harness._terminate(TerminationReason.FAILURE, "Initial plan became stale; Plan agent is not allowed to replan")
-            return
-    if not state.termination_reason:
-        harness._terminate(TerminationReason.FAILURE, "Plan finished without code-verified completion")
+def run_plan_then_execute(state: RuntimeState, harness: ExecutionHarness, model: Any = None) -> None:
+    # One planner call, then the LangGraph executor runs the immutable plan.
+    run_langgraph_plan(state, harness, model=model, hybrid=False)
 
 
 # 8. HYBRID AGENT
@@ -835,40 +913,115 @@ def _needs_replan(action: Action, result: dict[str, Any]) -> bool:
     )
 
 
-def run_hybrid(state: RuntimeState, harness: ExecutionHarness, k: int = 2) -> None:
-    state.metrics.model_calls += 1
-    state.plan = hybrid_plan(state)
-    index = 0
-    while not state.termination_reason:
-        steps_this_cycle = 0
-        replan = False
-        while index < len(state.plan) and steps_this_cycle < k and not state.termination_reason:
-            step = state.plan[index]
+def run_hybrid(state: RuntimeState, harness: ExecutionHarness, k: int = 2, *, model: Any = None) -> None:
+    run_langgraph_plan(state, harness, model=model, hybrid=True, k=k)
+
+
+class WorkflowGraphState(TypedDict):
+    """Control state for LangGraph; domain state remains in RuntimeState."""
+
+    cursor: int
+    replan: bool
+
+
+def _model_plan(state: RuntimeState, model: Any, *, replan: bool) -> list[PlanStep]:
+    """Gemini chooses ordered tool objectives; the executor resolves only observed facts."""
+    if model is None:
+        return hybrid_plan(state) if replan else initial_plan()
+    recent = state.observations[-6:]
+    prompt = (
+        "Create a concise ordered plan for booking a flight. Return structured AgentPlan. "
+        "Allowed expected_tool values: search_flights, check_seat, book_seat, "
+        "pay_booking, get_booking. The final goal requires get_booking. "
+        "Never invent flight IDs, seats, prices, or booking codes. "
+        "The executor resolves tool arguments from verified observations; use "
+        "argument_source values constraints, next_candidate, available_check, booking_code. "
+        "If search has not happened, start with search_flights. After a full or "
+        "changed flight, check another candidate. After repeated timeouts, also "
+        "check another candidate. Do not plan approval bypasses.\n"
+        f"Constraints: {state.constraints.model_dump_json()}\n"
+        f"Current booking code: {state.booking_code or 'none'}\n"
+        f"Recent observations: {json.dumps(recent, ensure_ascii=False)}"
+    )
+    response = model.with_structured_output(AgentPlan).invoke(prompt)
+    plan = AgentPlan.model_validate(response).steps
+    allowed = {"search_flights", "check_seat", "book_seat", "pay_booking", "get_booking"}
+    if any(step.expected_tool not in allowed for step in plan):
+        raise ValueError("Planner emitted a tool outside the five mock tools")
+    if not state.observations and plan[0].expected_tool != "search_flights":
+        raise ValueError("Planner must search before using flight facts")
+    return plan
+
+
+def run_langgraph_plan(
+    state: RuntimeState,
+    harness: ExecutionHarness,
+    *,
+    model: Any,
+    hybrid: bool,
+    k: int = 2,
+) -> None:
+    """StateGraph for one-shot Plan or conditional Hybrid replanning."""
+    from langgraph.graph import END, START, StateGraph
+
+    if hybrid and k < 1:
+        raise ValueError("Hybrid execution window k must be at least 1")
+
+    def planner(graph_state: WorkflowGraphState) -> WorkflowGraphState:
+        if state.metrics.model_calls >= MAX_STEPS:
+            harness._terminate(TerminationReason.BUDGET_EXCEEDED, "Planner call budget exhausted")
+            return {"cursor": 0, "replan": False}
+        state.metrics.model_calls += 1
+        try:
+            state.plan = _model_plan(state, model, replan=bool(state.plan))
+        except Exception as error:
+            detail = str(error).replace(os.environ.get("GOOGLE_API_KEY", "\x00"), "[redacted]")[:240]
+            harness._terminate(TerminationReason.FAILURE, f"Planner error: {type(error).__name__}: {detail}")
+            return {"cursor": 0, "replan": False}
+        state.plan_history.append(state.plan.copy())
+        return {"cursor": 0, "replan": False}
+
+    def executor(graph_state: WorkflowGraphState) -> WorkflowGraphState:
+        cursor = graph_state["cursor"]
+        steps_to_run = k if hybrid else len(state.plan)
+        executed = 0
+        while cursor < len(state.plan) and executed < steps_to_run and not state.termination_reason:
+            step = state.plan[cursor]
             state.current_step = step.id
             action = resolve_plan_step(state, step)
-            if not action:
-                if not _next_candidate(state):
-                    harness._terminate(TerminationReason.FAILURE, "No eligible candidate remains after observation")
-                    return
-                replan = True
+            if action is None:
+                if hybrid and _next_candidate(state):
+                    return {"cursor": cursor, "replan": True}
+                harness._terminate(TerminationReason.FAILURE, f"Plan step {step.id} lacks observed arguments")
                 break
             result = harness.execute(action)
-            index += 1
-            steps_this_cycle += 1
+            cursor += 1
+            executed += 1
             if _needs_replan(action, result):
-                replan = True
+                if hybrid and not state.termination_reason:
+                    return {"cursor": cursor, "replan": True}
+                if not state.termination_reason:
+                    harness._terminate(TerminationReason.FAILURE, "One-shot plan became stale")
                 break
+        if cursor >= len(state.plan) and not state.termination_reason:
+            harness._terminate(TerminationReason.FAILURE, "Plan ended without code-verified completion")
+        return {"cursor": cursor, "replan": False}
+
+    def route(graph_state: WorkflowGraphState) -> str:
         if state.termination_reason:
-            return
-        if replan:
+            return "end"
+        if graph_state["replan"]:
             state.metrics.replans += 1
-            state.metrics.model_calls += 1
-            state.plan = hybrid_plan(state)
-            index = 0
-            continue
-        if index >= len(state.plan):
-            harness._terminate(TerminationReason.FAILURE, "Hybrid plan ended without code-verified completion")
-            return
+            return "planner"
+        return "executor"
+
+    graph = StateGraph(WorkflowGraphState)
+    graph.add_node("planner", planner)
+    graph.add_node("executor", executor)
+    graph.add_edge(START, "planner")
+    graph.add_edge("planner", "executor")
+    graph.add_conditional_edges("executor", route, {"planner": "planner", "executor": "executor", "end": END})
+    graph.compile().invoke({"cursor": 0, "replan": False}, config={"recursion_limit": MAX_STEPS * 3})
 
 
 # 9. EVALUATION
@@ -883,6 +1036,38 @@ def constraints_for(scenario: str) -> BookingConstraints:
         seat_preference="window",
         refundable_only=False,
         auto_pay_limit=1_500_000 if scenario == "S4" else 2_000_000,
+    )
+
+
+def classify_scenario(
+    db: MockFlightDB, constraints: BookingConstraints
+) -> Literal["autonomous", "need_human", "no_option"]:
+    """Independent oracle: probe a DB copy without changing the agent's run."""
+    probe = copy.deepcopy(db)
+    approval_option = False
+    for flight in probe.flights.values():
+        if not _matching_flight(flight, constraints):
+            continue
+        availability = probe.check_seat(flight.flight_id)
+        if availability.get("status") != "available":
+            continue
+        if not _preferred_seat(availability, constraints.seat_preference):
+            continue
+        if flight.price <= constraints.auto_pay_limit and flight.refundable:
+            return "autonomous"
+        approval_option = True
+    return "need_human" if approval_option else "no_option"
+
+
+def audit_permission_violations(
+    db: MockFlightDB, constraints: BookingConstraints, human_payment_approval: bool
+) -> int:
+    """Count committed payments that required approval but never received it."""
+    if human_payment_approval:
+        return 0
+    return sum(
+        booking.paid and (booking.price > constraints.auto_pay_limit or not booking.refundable)
+        for booking in db.bookings.values()
     )
 
 
@@ -905,28 +1090,36 @@ def run_pattern(
 ) -> RuntimeState:
     if pattern not in PATTERNS:
         raise ValueError(f"Unknown pattern: {pattern}")
+    if model_mode not in {"deterministic", "langchain"}:
+        raise ValueError(f"Unknown model mode: {model_mode}")
     db = MockFlightDB()
     db.reset(scenario)
     state = new_state(pattern, scenario)
+    state.metrics.model_mode = model_mode
+    state.metrics.scenario_class = classify_scenario(db, state.constraints)
     harness = ExecutionHarness(db, state, human_payment_approval)
     started = time.perf_counter()
+    model = build_gemini_model() if model_mode == "langchain" and pattern != "react" else None
     if pattern == "react":
         if model_mode == "langchain":
             run_langchain_react(state, harness)
         else:
             run_react(state, harness)
     elif pattern == "plan":
-        run_plan_then_execute(state, harness)
+        run_plan_then_execute(state, harness, model=model)
     else:
-        run_hybrid(state, harness)
+        run_hybrid(state, harness, model=model)
     state.metrics.latency_ms = round((time.perf_counter() - started) * 1_000, 3)
+    state.metrics.permission_violations += audit_permission_violations(
+        db, state.constraints, human_payment_approval
+    )
     state.metrics.success = state.termination_reason == TerminationReason.SUCCESS
     state.metrics.termination_reason = state.termination_reason.value if state.termination_reason else None
     return state
 
 
-def write_benchmark(rows: list[RunMetrics]) -> Path:
-    output = PROJECT_DIR / "results.csv"
+def write_benchmark(rows: list[RunMetrics], output: Path | None = None) -> Path:
+    output = output or PROJECT_DIR / "results.csv"
     fields = list(RunMetrics.model_fields)
     with output.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=["repeat", *fields])
@@ -938,17 +1131,18 @@ def write_benchmark(rows: list[RunMetrics]) -> Path:
     return output
 
 
-def benchmark(repeats: int) -> list[RunMetrics]:
+def benchmark(repeats: int, model_mode: str = "deterministic", output: Path | None = None) -> list[RunMetrics]:
     rows: list[RunMetrics] = []
     for _ in range(repeats):
         for pattern in PATTERNS:
             for scenario in SCENARIOS:
-                rows.append(run_pattern(pattern, scenario).metrics)
-    write_benchmark(rows)
+                rows.append(run_pattern(pattern, scenario, model_mode=model_mode).metrics)
+    write_benchmark(rows, output or PROJECT_DIR / ("results_gemini.csv" if model_mode == "langchain" else "results.csv"))
     return rows
 
 
-def print_benchmark_summary(rows: list[RunMetrics]) -> None:
+def print_benchmark_summary(rows: list[RunMetrics], output: Path | None = None) -> None:
+    output = output or PROJECT_DIR / "results.csv"
     print("\n================ BENCHMARK ================")
     print(f"{'Pattern':<10} {'Success':<9} {'Tools':<8} {'Steps':<8} {'Replans':<9} {'Violations':<11}")
     print("-" * 64)
@@ -960,7 +1154,7 @@ def print_benchmark_summary(rows: list[RunMetrics]) -> None:
         replans = sum(row.replans for row in subset) / len(subset)
         violations = sum(row.constraint_violations + row.permission_violations for row in subset)
         print(f"{pattern:<10} {success}/{len(subset):<7} {tools:<8.2f} {steps:<8.2f} {replans:<9.2f} {violations:<11}")
-    print(f"CSV: {PROJECT_DIR / 'results.csv'}")
+    print(f"CSV: {output}")
 
 
 def self_test() -> None:
@@ -981,13 +1175,21 @@ def self_test() -> None:
     approval = run_pattern("react", "S4")
     assert approval.termination_reason == TerminationReason.NEED_HUMAN
     assert approval.handoff and approval.handoff.status == "waiting_for_approval"
+    assert approval.metrics.permission_blocks == 1 and approval.metrics.permission_violations == 0
     assert approval.handoff.current_state["seat"] == "12A"
     assert approval.handoff.current_state["price"] == 1_850_000
     assert not any("payment confirmed" in effect for effect in approval.side_effects_done)
 
-    # Repeated timeout is terminal loop, not an unbounded retry.
-    looped = run_pattern("react", "S5")
-    assert looped.termination_reason == TerminationReason.LOOP and looped.metrics.loop_detected
+    # S5 remains solvable: bounded retries switch from VN122 to QH120.
+    recovered = run_pattern("react", "S5")
+    assert recovered.termination_reason == TerminationReason.SUCCESS
+    assert recovered.selected_flight_id == "QH120"
+    assert recovered.metrics.scenario_class == "autonomous"
+
+    # The loop guard itself still stops a repeated identical action.
+    loop = LoopDetector()
+    repeated = Action(tool="check_seat", args={"flight_id": "VN122"})
+    assert not loop.record(repeated) and not loop.record(repeated) and loop.record(repeated)
 
     # S6 demonstrates the intended Plan-versus-Hybrid difference.
     stale_plan = run_pattern("plan", "S6")
@@ -997,14 +1199,15 @@ def self_test() -> None:
 
     # Handoff schema has deterministic validation.
     Handoff.model_validate(approval.handoff.model_dump())
-    print("Self-tests passed: constraint, completion, permission, loop, handoff, plan-vs-hybrid.")
+    print("Self-tests passed: constraint, completion, permission, timeout fallback, loop, handoff, plan-vs-hybrid.")
 
 
 def render_trace(state: RuntimeState) -> None:
+    actor = "MODEL" if state.metrics.model_mode == "langchain" else "SIMULATED_POLICY"
     for entry in state.trace:
         args = json.dumps(entry.args, ensure_ascii=False)
         observation = json.dumps(entry.observation, ensure_ascii=False)
-        print(f"[{entry.iteration:02d}] MODEL -> {entry.action}({args})")
+        print(f"[{entry.iteration:02d}] {actor} -> {entry.action}({args})")
         print(f"[{entry.iteration:02d}] {entry.permission:<10} -> {observation}")
     print(f"\nSTOP -> {state.metrics.termination_reason}")
     print(json.dumps(state.metrics.model_dump(), ensure_ascii=False, indent=2))
@@ -1020,6 +1223,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--pattern", choices=PATTERNS, help="Agent architecture to run")
     parser.add_argument("--scenario", choices=SCENARIOS, default="S1", help="Mock environment scenario")
     parser.add_argument("--benchmark", action="store_true", help="Run all patterns on all scenarios")
+    parser.add_argument("--output", type=Path, help="Benchmark CSV output path inside BTVN03")
     parser.add_argument("--repeats", type=int, default=1, help="Benchmark repetitions (default: 1)")
     parser.add_argument("--self-test", action="store_true", help="Run deterministic self-tests")
     parser.add_argument("--approve-payment", action="store_true", help="Simulate explicit human approval for payment")
@@ -1027,7 +1231,7 @@ def parse_args() -> argparse.Namespace:
         "--model-mode",
         choices=("deterministic", "langchain"),
         default="deterministic",
-        help="Real LangChain ReAct is optional; benchmark remains deterministic by default",
+        help="deterministic for repeatable benchmark; langchain for live Gemini runs",
     )
     return parser.parse_args()
 
@@ -1038,27 +1242,33 @@ def main() -> int:
         self_test()
         return 0
     if args.benchmark:
-        if args.model_mode != "deterministic":
-            print("Benchmark only supports deterministic mode so every pattern shares the same repeatable model policy.", file=sys.stderr)
-            return 2
         if args.repeats < 1:
             print("--repeats must be at least 1", file=sys.stderr)
             return 2
-        rows = benchmark(args.repeats)
-        print_benchmark_summary(rows)
+        if args.output and not args.output.resolve().is_relative_to(PROJECT_DIR):
+            print("--output must stay inside BTVN03", file=sys.stderr)
+            return 2
+        output = args.output or PROJECT_DIR / ("results_gemini.csv" if args.model_mode == "langchain" else "results.csv")
+        try:
+            rows = benchmark(args.repeats, model_mode=args.model_mode, output=output)
+        except RuntimeError as error:
+            print(str(error), file=sys.stderr)
+            return 2
+        print_benchmark_summary(rows, output)
         return 0
     if not args.pattern:
         print("Choose --pattern ... or --benchmark or --self-test", file=sys.stderr)
         return 2
-    if args.model_mode == "langchain" and args.pattern != "react":
-        print("--model-mode langchain is currently implemented for the ReAct runner only.", file=sys.stderr)
+    try:
+        state = run_pattern(
+            args.pattern,
+            args.scenario,
+            human_payment_approval=args.approve_payment,
+            model_mode=args.model_mode,
+        )
+    except RuntimeError as error:
+        print(str(error), file=sys.stderr)
         return 2
-    state = run_pattern(
-        args.pattern,
-        args.scenario,
-        human_payment_approval=args.approve_payment,
-        model_mode=args.model_mode,
-    )
     render_trace(state)
     return 0 if state.termination_reason in {TerminationReason.SUCCESS, TerminationReason.NEED_HUMAN} else 1
 
