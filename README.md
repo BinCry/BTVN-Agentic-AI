@@ -1,80 +1,132 @@
-# BTVN Agentic AI — Kho lưu trữ bài tập thực hành
+# BTVN Agentic AI
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Gemini](https://img.shields.io/badge/Gemini-Google_Gen_AI-8E75B2?style=for-the-badge&logo=googlegemini&logoColor=white)](https://ai.google.dev/gemini-api/docs)
 [![License](https://img.shields.io/badge/License-Educational-green?style=for-the-badge)](https://github.com/BinCry/BTVN-Agentic-AI)
 
-Repository tổng hợp mã nguồn, bài tập về nhà (BTVN) và các dự án thực hành qua các buổi trong khóa học **Agentic AI**.
+Kho lưu trữ bài tập thực hành của khóa học **Agentic AI**. Mỗi thư mục BTVN là một bài độc lập, có hướng dẫn cài đặt và cách chạy riêng.
 
 ---
 
-## 📂 Danh sách bài tập
+## Danh sách bài tập
 
-| Buổi | Thư mục | Chủ đề | Công nghệ / Tính năng chính |
-| :--- | :--- | :--- | :--- |
-| **Buổi 02** | [`BTVN02/`](./BTVN02/) | **Agentic AI Issue Triage** | • LLM Minimal Call<br>• Đo lường Token (tiktoken)<br>• Structured Output với Pydantic<br>• Controlled Function Calling<br>• Giao diện Web Streamlit |
-| **Buổi 03** | `BTVN03/` *(Sắp tới)* | *Đang cập nhật...* | *Đang cập nhật...* |
+| Buổi | Thư mục | Chủ đề | Công nghệ / nội dung chính |
+| --- | --- | --- | --- |
+| 02 | [BTVN02/](./BTVN02/) | Agentic AI Issue Triage | Gemini, đo token bằng tiktoken, Pydantic structured output, function calling có kiểm soát, Streamlit |
+| 03 | [BTVN03/](./BTVN03/) | Agent đặt vé máy bay bằng LangChain | ReAct, Plan-then-Execute, mẫu Lai, mock tools và harness kiểm soát agent |
 
 ---
 
-## 🏗️ Cấu trúc Repository
+## Cấu trúc repository
 
 ```text
 BTVN-Agentic-AI/
-├── BTVN02/                         # Bài tập buổi 2: Issue Triage with Gemini
-│   ├── 00_minimal_triage.py        # Demo 00: Gọi Gemini cơ bản
-│   ├── 01_measure_tokens.py        # Demo 01: Đo token tiếng Anh/Việt
-│   ├── 02_structured_output.py     # Demo 02: Structured output với Pydantic
-│   ├── 03_function_calling.py      # Demo 03: Function calling có kiểm soát
-│   ├── 04_streamlit_triage.py      # Demo 04: Giao diện web Streamlit
-│   ├── demo_common.py              # Cấu hình Gemini & biến môi trường
-│   ├── triage_workflow.py          # Luồng triage và validation tool call
-│   ├── demo-guide.html             # Hướng dẫn chi tiết định dạng HTML
-│   ├── requirements.txt            # Thư viện phụ thuộc cho BTVN02
-│   ├── README.md                   # Hướng dẫn chi tiết cho BTVN02
-│   └── docs/                       # Tài liệu & nhật ký phát triển
-├── README.md                       # Giới thiệu tổng quan repository
-└── .gitignore                      # Cấu hình bỏ qua các file nhạy cảm và cache
+├── BTVN02/                              # Bài 02: Issue Triage với Gemini
+│   ├── 00_minimal_triage.py             # Gọi Gemini cơ bản
+│   ├── 01_measure_tokens.py             # Đo token tiếng Anh và tiếng Việt
+│   ├── 02_structured_output.py          # Structured output với Pydantic
+│   ├── 03_function_calling.py           # Function calling có kiểm soát
+│   ├── 04_streamlit_triage.py           # Giao diện Streamlit
+│   ├── demo_common.py                   # Cấu hình Gemini dùng chung
+│   ├── triage_workflow.py               # Luồng triage và kiểm tra tool call
+│   ├── requirements.txt                 # Phụ thuộc của BTVN02
+│   ├── .env.example                     # Mẫu biến môi trường cho Gemini
+│   └── README.md                        # Hướng dẫn chi tiết BTVN02
+├── BTVN03/                              # Bài 03: Agent đặt vé máy bay
+│   ├── flight_agent.py                  # ReAct + harness
+│   ├── flight_agent_plan_then_execute.py # Plan-then-Execute
+│   ├── flight_agent_hybrid.py           # Mẫu Lai: plan, execute, ReAct recovery
+│   ├── flight_agent_failure_mode.py     # Failure modes và harness fixes
+│   └── BaoCao_BTVN03_Agent_Dat_Ve_May_Bay.pdf
+├── .gitignore
+└── README.md
 ```
 
 ---
 
-## 🚀 Hướng dẫn bắt đầu chung
+## Bắt đầu nhanh
 
-Mỗi bài tập được thiết kế độc lập theo từng thư mục (ví dụ: `BTVN02/`). Để làm việc với một bài tập cụ thể:
+Clone repository và mở PowerShell tại thư mục gốc:
 
-### 1. Clone Repository
 ```powershell
 git clone https://github.com/BinCry/BTVN-Agentic-AI.git
 cd BTVN-Agentic-AI
 ```
 
-### 2. Di chuyển vào thư mục bài tập cần chạy
+### BTVN02 — Issue Triage với Gemini
+
+BTVN02 yêu cầu Python 3.10 trở lên và Google AI Studio API key.
+
 ```powershell
 cd BTVN02
-```
-
-### 3. Thiết lập môi trường Python & Cài đặt dependencies
-```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-```
-
-*(Trên macOS / Linux: sử dụng `source .venv/bin/activate`)*
-
-### 4. Cấu hình biến môi trường
-Tạo file `.env` từ file mẫu `.env.example` và điền API key của bạn:
-```powershell
+python -m pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
 
-Xem hướng dẫn chi tiết về cách chạy từng demo và tính năng trong `README.md` của từng thư mục bài tập (ví dụ: [`BTVN02/README.md`](./BTVN02/README.md)).
+Mở `.env` và điền API key của bạn:
+
+```dotenv
+GEMINI_API_KEY=your_google_ai_studio_key
+GEMINI_MODEL=gemini-3.5-flash-lite
+```
+
+Chạy các demo từ thư mục `BTVN02`:
+
+```powershell
+python 00_minimal_triage.py
+python 01_measure_tokens.py
+python 02_structured_output.py
+python 03_function_calling.py
+streamlit run 04_streamlit_triage.py
+```
+
+Xem [README của BTVN02](./BTVN02/README.md) để biết mô tả từng demo và các tùy chọn dòng lệnh.
+
+### BTVN03 — Agent đặt vé máy bay bằng LangChain
+
+BTVN03 dùng dữ liệu mockup và fake model được lập kịch bản. Bài này **không cần API key, file `.env` hay kết nối mạng**.
+
+Từ thư mục gốc repository, cài môi trường và phụ thuộc:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install "langchain>=1.0,<2" "pydantic>=2.7,<3"
+```
+
+Chạy bốn demo:
+
+```powershell
+python .\BTVN03\flight_agent.py
+python .\BTVN03\flight_agent_plan_then_execute.py
+python .\BTVN03\flight_agent_hybrid.py
+python .\BTVN03\flight_agent_failure_mode.py
+```
+
+| File | Mẫu agent / mục tiêu | Kịch bản chính |
+| --- | --- | --- |
+| `flight_agent.py` | ReAct | Chọn `1` để đặt VN122 hợp lệ; chọn `2` để xem harness chặn VJ604 và handoff. |
+| `flight_agent_plan_then_execute.py` | Plan-then-Execute | Lập kế hoạch, chờ người dùng duyệt, rồi chạy tuần tự các bước. |
+| `flight_agent_hybrid.py` | Mẫu Lai | Lập kế hoạch trước; nếu kế hoạch bị chặn, ReAct tìm phương án phù hợp hoặc handoff. |
+| `flight_agent_failure_mode.py` | Thí nghiệm lỗi | Minh họa loop, tool hallucination, goal drift và state corruption khi bật/tắt harness. |
+
+Harness của BTVN03 kiểm soát bốn điểm: ràng buộc được lưu dưới dạng dữ liệu, kiểm tra quyền trước khi gọi tool, xác nhận hoàn thành bằng code và bàn giao cho người dùng khi không thể hoàn tất đúng điều kiện. Báo cáo chi tiết nằm tại [BaoCao_BTVN03_Agent_Dat_Ve_May_Bay.pdf](./BTVN03/BaoCao_BTVN03_Agent_Dat_Ve_May_Bay.pdf).
+
+> Trên macOS/Linux, kích hoạt môi trường bằng `source .venv/bin/activate`.
 
 ---
 
-## 🔒 Quy ước bảo mật (Security Best Practices)
+## Bảo mật và quy ước
 
-- **Tuyệt đối không đưa API Key thật** vào mã nguồn, README hay commit lên GitHub.
-- Tất cả API Key đều được nạp thông qua file `.env` cục bộ. File `.gitignore` ở root và từng thư mục đã được cấu hình để chặn upload `.env`, virtual environment (`.venv`) và cache.
-- Khi chia sẻ mã nguồn hoặc nộp bài, chỉ chia sẻ mã nguồn sạch, không bao gồm thông tin xác thực hay quota cá nhân.
+- Không đưa API key, token, mật khẩu hoặc thông tin xác thực vào source code, tài liệu hay commit.
+- Bài nào cần thông tin nhạy cảm thì lưu cục bộ trong `.env` và đưa mẫu an toàn vào `.env.example`; dùng `.gitignore` để loại trừ `.env`, `.venv` và cache.
+- BTVN03 không sử dụng bí mật hay dịch vụ bên ngoài, vì vậy không cần tạo `.env`.
+- Nếu một API key đã bị lộ, hãy thu hồi hoặc xoay key tại nhà cung cấp ngay.
+
+## Tài liệu tham khảo
+
+- [LangChain documentation](https://docs.langchain.com/oss/python/langchain/overview)
+- [LangGraph documentation](https://docs.langchain.com/oss/python/langgraph/overview)
+- [ReAct: Synergizing Reasoning and Acting in Language Models](https://arxiv.org/abs/2210.03629)
