@@ -1,6 +1,0 @@
-.venv/
-.pip-cache/
-.tmp/
-.env
-__pycache__/
-*.pyc
