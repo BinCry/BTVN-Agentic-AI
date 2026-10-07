@@ -14,6 +14,7 @@ Kho lưu trữ bài tập thực hành của khóa học **Agentic AI**. Mỗi t
 | --- | --- | --- | --- |
 | 02 | [BTVN02/](./BTVN02/) | Agentic AI Issue Triage | Gemini, đo token bằng tiktoken, Pydantic structured output, function calling có kiểm soát, Streamlit |
 | 03 | [BTVN03/](./BTVN03/) | Agent đặt vé máy bay bằng LangChain | ReAct, Plan-then-Execute, mẫu Lai, mock tools và harness kiểm soát agent |
+| BTTL | [BTTL/agent-tools-skills-lab/agent-tools-skills-lab/](./BTTL/agent-tools-skills-lab/agent-tools-skills-lab/) | Agent Tools & Skills Lab | Python 3.11+, LangChain, Streamlit, uv, native tool calling |
 
 ---
 
@@ -38,6 +39,17 @@ BTVN-Agentic-AI/
 │   ├── flight_agent_hybrid.py           # Mẫu Lai: plan, execute, ReAct recovery
 │   ├── flight_agent_failure_mode.py     # Failure modes và harness fixes
 │   └── BaoCao_BTVN03_Agent_Dat_Ve_May_Bay.pdf
+├── BTTL/                                # Bài tập tại lớp: Agent Tools & Skills Lab
+│   └── agent-tools-skills-lab/
+│       └── agent-tools-skills-lab/
+│           ├── README.md
+│           ├── pyproject.toml
+│           ├── uv.lock
+│           ├── stage-00-chat/
+│           ├── stage-01-files/
+│           ├── stage-02-skills/
+│           ├── stage-03-bash/
+│           └── stage-04-script-skill/
 ├── .gitignore
 └── README.md
 ```
@@ -113,6 +125,47 @@ python .\BTVN03\flight_agent_failure_mode.py
 | `flight_agent_failure_mode.py` | Thí nghiệm lỗi | Minh họa loop, tool hallucination, goal drift và state corruption khi bật/tắt harness. |
 
 Harness của BTVN03 kiểm soát bốn điểm: ràng buộc được lưu dưới dạng dữ liệu, kiểm tra quyền trước khi gọi tool, xác nhận hoàn thành bằng code và bàn giao cho người dùng khi không thể hoàn tất đúng điều kiện. Báo cáo chi tiết nằm tại [BaoCao_BTVN03_Agent_Dat_Ve_May_Bay.pdf](./BTVN03/BaoCao_BTVN03_Agent_Dat_Ve_May_Bay.pdf).
+
+### BTTL — Agent Tools & Skills Lab
+
+BTTL là **Bài tập tại lớp** gồm năm stage tăng dần khả năng của LangChain agent: chat, thao tác file, dùng skill, chạy Bash và skill có script kiểm tra CSV.
+
+BTTL yêu cầu Python 3.11 trở lên, [uv](https://docs.astral.sh/uv/) và API key của provider OpenAI hoặc endpoint tương thích OpenAI Chat Completions có hỗ trợ native tool calling.
+
+Từ thư mục gốc repository, cài môi trường và phụ thuộc chung cho cả năm stage:
+
+```powershell
+cd .\BTTL\agent-tools-skills-lab\agent-tools-skills-lab
+uv sync --all-packages --locked
+```
+
+Vào stage muốn chạy, ví dụ Stage 02, rồi tạo file cấu hình cục bộ:
+
+```powershell
+cd stage-02-skills
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+```
+
+Mở `.env` và điền cấu hình của provider:
+
+```dotenv
+OPENAI_API_KEY=your_provider_api_key
+MODEL_NAME=your_tool_calling_model
+OPENAI_BASE_URL=https://your-provider.example/v1
+```
+
+`OPENAI_BASE_URL` là tùy chọn. Endpoint dùng biến này phải hỗ trợ `tools`, `tool_calls` và message role `tool`.
+
+Chạy ứng dụng và test từ thư mục của stage:
+
+```powershell
+uv run streamlit run app.py
+uv run pytest
+```
+
+Stage 01–04 có thể khôi phục dữ liệu mẫu bằng `uv run python reset_workspace.py`; test dùng mock model nên không cần API key. Riêng `stage-03-bash` và `stage-04-script-skill` cần môi trường POSIX có Bash—trên Windows, hãy chạy bằng WSL2.
+
+Xem [README của BTTL](./BTTL/agent-tools-skills-lab/agent-tools-skills-lab/README.md) để biết mục tiêu, tools, skills và lệnh reset của từng stage.
 
 > Trên macOS/Linux, kích hoạt môi trường bằng `source .venv/bin/activate`.
 
