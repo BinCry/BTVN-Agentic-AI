@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "conventions": [
+    {
+      "topic": "api_field_style",
+      "value": "camelCase",
+      "version": 1,
+      "status": "superseded",
+      "recorded_at": "2026-10-21T09:00:00+00:00",
+      "source_session": "day-1",
+      "superseded_at": "2026-10-21T09:10:00+00:00",
+      "superseded_by": 2
+    },
+    {
+      "topic": "api_field_style",
+      "value": "snake_case",
+      "version": 2,
+      "status": "active",
+      "recorded_at": "2026-10-21T09:10:00+00:00",
+      "source_session": "day-3"
+    }
+  ]
+}

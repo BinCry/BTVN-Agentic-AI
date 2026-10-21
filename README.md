@@ -15,6 +15,7 @@ Kho lưu trữ bài tập thực hành của khóa học **Agentic AI**. Mỗi t
 | 02 | [BTVN02/](./BTVN02/) | Agentic AI Issue Triage | Gemini, đo token bằng tiktoken, Pydantic structured output, function calling có kiểm soát, Streamlit |
 | 03 | [BTVN03/](./BTVN03/) | Agent đặt vé máy bay bằng LangChain | ReAct, Plan-then-Execute, mẫu Lai, mock tools và harness kiểm soát agent |
 | BTTL | [BTTL/agent-tools-skills-lab/agent-tools-skills-lab/](./BTTL/agent-tools-skills-lab/agent-tools-skills-lab/) | Agent Tools & Skills Lab | Python 3.11+, LangChain, Streamlit, uv, native tool calling |
+| Challenge A | [Challenge A/](./Challenge%20A/) | Persistent Memory | Python standard library, persistent memory qua session, versioning và audit trail |
 
 ---
 
@@ -50,6 +51,13 @@ BTVN-Agentic-AI/
 │           ├── stage-02-skills/
 │           ├── stage-03-bash/
 │           └── stage-04-script-skill/
+├── Challenge A/                         # Challenge A: Persistent Memory
+│   ├── memory_harness.py                # CLI lưu, nạp và inject memory
+│   ├── demo.py                          # Demo bốn session độc lập
+│   ├── tests/
+│   │   └── test_challenge_a.py          # Kiểm thử persistence và supersession
+│   ├── demo-output/                     # Dữ liệu được tạo lại khi chạy demo
+│   └── README.md                        # Hướng dẫn chi tiết Challenge A
 ├── .gitignore
 └── README.md
 ```
@@ -64,6 +72,34 @@ Clone repository và mở PowerShell tại thư mục gốc:
 git clone https://github.com/BinCry/BTVN-Agentic-AI.git
 cd BTVN-Agentic-AI
 ```
+
+### Challenge A — Persistent Memory
+
+Challenge A là harness memory bền vững chạy hoàn toàn offline bằng Python standard library. Bài yêu cầu **Python 3.11+** và không cần cài thêm package hay API key.
+
+Từ thư mục gốc repository, chạy demo minh họa bốn session và việc thay thế convention cũ:
+
+```powershell
+cd ".\Challenge A"
+python demo.py
+```
+
+Demo ghi dữ liệu có thể tái tạo vào `demo-output/`. Để dùng CLI với persistent store riêng trong `data/`, chạy lần lượt:
+
+```powershell
+python memory_harness.py remember --store data/memory.json --topic api_field_style --value camelCase --session day-1
+python memory_harness.py ask --store data/memory.json --session day-2 --task "Create a user endpoint"
+python memory_harness.py remember --store data/memory.json --topic api_field_style --value snake_case --session day-3
+python memory_harness.py ask --store data/memory.json --session day-4 --task "Create a user endpoint"
+```
+
+`ask` luôn in khối `INJECTED_MEMORY` trước câu trả lời; chỉ các convention `active` được inject. Chạy kiểm thử bằng:
+
+```powershell
+python -m unittest discover -s tests -v
+```
+
+Xem [README của Challenge A](./Challenge%20A/README.md) để biết thiết kế storage, audit log và các lệnh CLI đầy đủ.
 
 ### BTVN02 — Issue Triage với Gemini
 
