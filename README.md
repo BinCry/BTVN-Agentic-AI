@@ -54,6 +54,7 @@ BTVN-Agentic-AI/
 ├── Challenge A/                         # Challenge A: Persistent Memory
 │   ├── memory_harness.py                # CLI lưu, nạp và inject memory
 │   ├── demo.py                          # Demo bốn session độc lập
+│   ├── .env.example                     # Cấu hình Gemini tùy chọn
 │   ├── tests/
 │   │   └── test_challenge_a.py          # Kiểm thử persistence và supersession
 │   ├── demo-output/                     # Dữ liệu được tạo lại khi chạy demo
@@ -75,7 +76,7 @@ cd BTVN-Agentic-AI
 
 ### Challenge A — Persistent Memory
 
-Challenge A là harness memory bền vững chạy hoàn toàn offline bằng Python standard library. Bài yêu cầu **Python 3.11+** và không cần cài thêm package hay API key.
+Challenge A là harness memory bền vững bằng Python standard library. Bài yêu cầu **Python 3.11+**, không cần package ngoài và chạy offline mặc định; Gemini là lựa chọn tùy chọn khi có API key.
 
 Từ thư mục gốc repository, chạy demo minh họa bốn session và việc thay thế convention cũ:
 
@@ -93,7 +94,7 @@ python memory_harness.py remember --store data/memory.json --topic api_field_sty
 python memory_harness.py ask --store data/memory.json --session day-4 --task "Create a user endpoint"
 ```
 
-`ask` luôn in khối `INJECTED_MEMORY` trước câu trả lời; chỉ các convention `active` được inject. Chạy kiểm thử bằng:
+`ask` luôn in khối `INJECTED_MEMORY` trước câu trả lời; mặc định chỉ inject tối đa ba convention active liên quan tới task. Để gọi Gemini thật, sao chép `.env.example` thành `.env`, điền `GEMINI_API_KEY`, rồi thêm `--provider gemini` vào lệnh `ask`. Chạy kiểm thử bằng:
 
 ```powershell
 python -m unittest discover -s tests -v

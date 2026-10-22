@@ -18,7 +18,7 @@ def reset_demo_data() -> None:
 
 
 def show_session(title: str, store: MemoryStore, task: str) -> None:
-    payload = store.injected_memory()
+    payload = store.injected_memory(task=task, limit=3)
     print(f"\n===== {title} =====")
     print(format_injected_memory(payload))
     print("AGENT_RESPONSE")
@@ -34,10 +34,20 @@ def main() -> None:
         "api_field_style", "camelCase", "day-1", "2026-10-21T09:00:00+00:00"
     )
     print("Saved api_field_style v1 = camelCase")
+    store.record(
+        "database_migration_style", "PostgreSQL migrations", "day-1", "2026-10-21T09:01:00+00:00"
+    )
+    store.record(
+        "authentication_scheme", "JWT bearer", "day-1", "2026-10-21T09:02:00+00:00"
+    )
+    print("Saved database_migration_style = PostgreSQL migrations")
+    print("Saved authentication_scheme = JWT bearer")
 
     # A newly constructed store models a separate process/session reopening disk state.
     show_session(
-        "SESSION day-2: a new session", MemoryStore(STORE_PATH), "Create a user endpoint"
+        "SESSION day-2: a new session",
+        MemoryStore(STORE_PATH),
+        "Create a PostgreSQL API user endpoint protected by JWT",
     )
 
     print("\n===== SESSION day-3: change the convention =====")
@@ -49,7 +59,7 @@ def main() -> None:
     show_session(
         "SESSION day-4: a new session after change",
         MemoryStore(STORE_PATH),
-        "Create a user endpoint",
+        "Create a PostgreSQL API user endpoint protected by JWT",
     )
     print("\n===== PERSISTED HISTORY =====")
     print(STORE_PATH.read_text(encoding="utf-8"))

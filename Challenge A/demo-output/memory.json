@@ -12,6 +12,22 @@
       "superseded_by": 2
     },
     {
+      "topic": "database_migration_style",
+      "value": "PostgreSQL migrations",
+      "version": 1,
+      "status": "active",
+      "recorded_at": "2026-10-21T09:01:00+00:00",
+      "source_session": "day-1"
+    },
+    {
+      "topic": "authentication_scheme",
+      "value": "JWT bearer",
+      "version": 1,
+      "status": "active",
+      "recorded_at": "2026-10-21T09:02:00+00:00",
+      "source_session": "day-1"
+    },
+    {
       "topic": "api_field_style",
       "value": "snake_case",
       "version": 2,

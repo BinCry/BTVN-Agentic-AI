@@ -1,2 +1,4 @@
 {"at": "2026-10-21T09:00:00+00:00", "event": "convention_recorded", "session": "day-1", "supersedes_version": null, "topic": "api_field_style", "value": "camelCase", "version": 1}
+{"at": "2026-10-21T09:01:00+00:00", "event": "convention_recorded", "session": "day-1", "supersedes_version": null, "topic": "database_migration_style", "value": "PostgreSQL migrations", "version": 1}
+{"at": "2026-10-21T09:02:00+00:00", "event": "convention_recorded", "session": "day-1", "supersedes_version": null, "topic": "authentication_scheme", "value": "JWT bearer", "version": 1}
 {"at": "2026-10-21T09:10:00+00:00", "event": "convention_updated", "session": "day-3", "supersedes_version": 1, "topic": "api_field_style", "value": "snake_case", "version": 2}
