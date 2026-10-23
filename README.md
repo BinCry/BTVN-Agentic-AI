@@ -16,6 +16,7 @@ Kho lưu trữ bài tập thực hành của khóa học **Agentic AI**. Mỗi t
 | 03 | [BTVN03/](./BTVN03/) | Agent đặt vé máy bay bằng LangChain | ReAct, Plan-then-Execute, mẫu Lai, mock tools và harness kiểm soát agent |
 | BTTL | [BTTL/agent-tools-skills-lab/agent-tools-skills-lab/](./BTTL/agent-tools-skills-lab/agent-tools-skills-lab/) | Agent Tools & Skills Lab | Python 3.11+, LangChain, Streamlit, uv, native tool calling |
 | Challenge A | [Challenge A/](./Challenge%20A/) | Persistent Memory | Python standard library, persistent memory qua session, versioning và audit trail |
+| Challenge B | [Challenge B/](./Challenge%20B/) | Context Management | Python standard library, session compaction, Code Mode runtime, multi-file log analysis, Gemini tùy chọn |
 
 ---
 
@@ -59,6 +60,13 @@ BTVN-Agentic-AI/
 │   │   └── test_challenge_a.py          # Kiểm thử persistence và supersession
 │   ├── demo-output/                     # Dữ liệu được tạo lại khi chạy demo
 │   └── README.md                        # Hướng dẫn chi tiết Challenge A
+├── Challenge B/                         # Challenge B: Context Management
+│   ├── context_harness.py               # CLI B1 compaction và B2 Code Mode
+│   ├── .env.example                     # Cấu hình Gemini tùy chọn
+│   ├── tests/
+│   │   └── test_context_harness.py       # Kiểm thử compaction, runtime và provider
+│   ├── docs/                            # Architecture, evidence, requirement matrix
+│   └── README.md                        # Hướng dẫn chạy Challenge B
 ├── .gitignore
 └── README.md
 ```
@@ -101,6 +109,24 @@ python -m unittest discover -s tests -v
 ```
 
 Xem [README của Challenge A](./Challenge%20A/README.md) để biết thiết kế storage, audit log và các lệnh CLI đầy đủ.
+
+### Challenge B — Context Management
+
+Challenge B chứng minh hai kỹ thuật context engineering bằng Python standard library và chạy offline mặc định:
+
+- **B1 — Session Compaction:** giảm active context nhưng giữ goal, constraint, failed attempt và next action trong structured checkpoint.
+- **B2 — Code Mode:** runtime xử lý nhiều file log; agent chỉ nhận findings tổng hợp, không nhận raw log.
+
+Từ thư mục gốc repository, chạy demo và tests:
+
+```powershell
+cd ".\Challenge B"
+python context_harness.py demo:b1 --output-dir demo-output
+python context_harness.py demo:b2 --output-dir demo-output
+python -m unittest discover -s tests -v
+```
+
+Không cần API key để nộp hoặc chạy demo offline. Gemini là tùy chọn: copy `.env.example` thành `.env`, điền `GEMINI_API_KEY` cục bộ, rồi thêm `--provider gemini` vào lệnh demo. Xem [README của Challenge B](./Challenge%20B/README.md) để biết kiến trúc, số liệu evidence và giới hạn runtime.
 
 ### BTVN02 — Issue Triage với Gemini
 
