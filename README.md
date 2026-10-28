@@ -17,6 +17,7 @@ Kho lưu trữ bài tập thực hành của khóa học **Agentic AI**. Mỗi t
 | BTTL | [BTTL/agent-tools-skills-lab/agent-tools-skills-lab/](./BTTL/agent-tools-skills-lab/agent-tools-skills-lab/) | Agent Tools & Skills Lab | Python 3.11+, LangChain, Streamlit, uv, native tool calling |
 | Challenge A | [Challenge A/](./Challenge%20A/) | Persistent Memory | Python standard library, persistent memory qua session, versioning và audit trail |
 | Challenge B | [Challenge B/](./Challenge%20B/) | Context Management | Python standard library, session compaction, Code Mode runtime, multi-file log analysis, Gemini tùy chọn |
+| Challenge C | [Challenge C/](./Challenge%20C/) | Cache-Aware Model Router | Python standard library, mô phỏng prompt cache, TTL/keep-alive, compaction, model switching và expected-cost routing |
 
 ---
 
@@ -67,6 +68,12 @@ BTVN-Agentic-AI/
 │   │   └── test_context_harness.py       # Kiểm thử compaction, runtime và provider
 │   ├── docs/                            # Architecture, evidence, requirement matrix
 │   └── README.md                        # Hướng dẫn chạy Challenge B
+├── Challenge C/                         # Challenge C: Cache-Aware Model Router
+│   ├── cache_aware_router.py            # CLI mô phỏng pricing, cache và router
+│   ├── tests/
+│   │   └── test_cache_aware_router.py   # Kiểm thử baseline và các chiến lược
+│   ├── PLAN.md                          # Phạm vi và kế hoạch triển khai
+│   └── README.md                        # Hướng dẫn, giả định và kịch bản demo
 ├── .gitignore
 └── README.md
 ```
@@ -127,6 +134,26 @@ python -m unittest discover -s tests -v
 ```
 
 Không cần API key để nộp hoặc chạy demo offline. Gemini là tùy chọn: copy `.env.example` thành `.env`, điền `GEMINI_API_KEY` cục bộ, rồi thêm `--provider gemini` vào lệnh demo. Xem [README của Challenge B](./Challenge%20B/README.md) để biết kiến trúc, số liệu evidence và giới hạn runtime.
+
+### Challenge C — Cache-Aware Model Router
+
+Challenge C mô phỏng quyết định tối ưu chi phí cho AI Agent đang giữ 50.000 token context: giữ **Warm A** với prompt cache, **Cold & Compact**, hoặc **Switch B**. Bài tính đủ cached/uncached input, TTL, keep-alive, compaction, retry và xác suất user quay lại; không cần API key hoặc package ngoài.
+
+Từ thư mục gốc repository, chạy demo và tests:
+
+```powershell
+cd ".\Challenge C"
+python cache_aware_router.py demo
+python -m unittest discover -s tests -v
+```
+
+Demo in ba scenario bắt buộc: return sau 3 phút, return sau 7 phút và xác suất return 60% trong 10 phút. Có thể xem ngưỡng thay đổi lựa chọn bằng:
+
+```powershell
+python cache_aware_router.py sensitivity
+```
+
+Xem [README của Challenge C](./Challenge%20C/README.md) để biết bảng giá, công thức, các giả định mô phỏng và kịch bản thuyết trình.
 
 ### BTVN02 — Issue Triage với Gemini
 
